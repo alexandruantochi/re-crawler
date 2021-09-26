@@ -24,29 +24,30 @@ class OlxReRoSpider(scrapy.Spider):
     }
 
     olx_meta = {
-        'Suprafata utila' : 'surface',
-        'Numarul de camere' : 'rooms',
+        'Suprafata utila': 'surface',
+        'Numarul de camere': 'rooms',
         'Etaj': 'floor',
-        'An constructie' : 'build',
-        'Persoana fizica' : True,
-        'Firma' : False
+        'An constructie': 'build',
+        'Persoana fizica': True,
+        'Firma': False
     }
 
     def parse(self, response):
         ads = response.css("div.offer-wrapper")
         ad_city = response.url.split('/?search')[0].split('/')[-1]
         today_ads_seen = False
-        for ad in ads[:5]:
+        for ad in ads:
             ad_time = ad.xpath(
                 ".//i[@data-icon='clock']/../text()").extract_first()
             if 'Ieri' in ad_time:
+                ad_link = ad.css("a.detailsLink::attr(href)").extract_first()
+                # ad is a promoted add, skip
+                if ad_link is None:
+                    continue
+
                 today_ads_seen = True
-                ad_link = ad.css("a.detailsLink::attr(href)").extract_first() or ad.css(
-                    "a.detailsLinkPromoted::attr(href)").extract_first()
                 ad_source = 'storia' if 'storia.ro' in ad_link else 'olx'
-                ad_promoted = ad.css(
-                    "a.detailsLinkPromoted::attr(href)").extract_first() is not None
-                yield response.follow(ad_link, self.parse_listing, cb_kwargs={'ad_source': ad_source, 'ad_promoted': ad_promoted, 'ad_city' : ad_city})
+                yield response.follow(ad_link, self.parse_listing, cb_kwargs={'ad_source': ad_source, 'ad_city': ad_city})
 
         if today_ads_seen:
             yield scrapy.Request(self.get_next_page(response), self.parse)
@@ -60,7 +61,8 @@ class OlxReRoSpider(scrapy.Spider):
 
         listing = extractor(response)
         listing['listed'] = date.today().isoformat()
-        listing['sqm_price'] = self.get_price_per_sqm(listing['surface'], listing['price'])
+        listing['sqm_price'] = self.get_price_per_sqm(
+            listing['surface'], listing['price'])
 
         for key in kwargs.keys():
             listing[key] = kwargs[key]
@@ -79,9 +81,10 @@ class OlxReRoSpider(scrapy.Spider):
 
     def get_olx_data(self, response):
         listing = {}
-        listing['price'] = self.get_number(response.css('div[data-testid="ad-price-container"] > h3::text').extract_first())
+        listing['price'] = self.get_number(response.css(
+            'div[data-testid="ad-price-container"] > h3::text').extract_first())
         info = response.css('ul > li > p::text').extract()
-        
+
         for entry in info:
             key_value_entry = entry.split(': ')
             # no key, just value (e.g. Firma, Persoana fizica, unknown)
@@ -122,6 +125,5 @@ class OlxReRoSpider(scrapy.Spider):
         return ''.join([c for c in number_to_parse if (c.isdecimal() or c in allowed_chars)])
 
     def get_price_per_sqm(self, surface, price):
-        surface = self.get_number(surface).replace(',','.')
+        surface = self.get_number(surface).replace(',', '.')
         return round(float(price) / float(surface))
-
