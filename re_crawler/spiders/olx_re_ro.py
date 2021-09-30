@@ -6,15 +6,15 @@ from datetime import date
 
 class OlxReRoSpider(scrapy.Spider):
     name = 'olx-re-ro'
+    ad_types = ['apartamente-garsoniere-de-vanzare'] #,'apartamente-garsoniere-de-inchiriat']
     allowed_domains = ['olx.ro', 'storia.ro']
-    start_urls = [
-        'https://www.olx.ro/imobiliare/apartamente-garsoniere-de-vanzare/iasi_39939/?search%5Border%5D=created_at%3Adesc&currency=EUR',
-        'https://www.olx.ro/imobiliare/apartamente-garsoniere-de-vanzare/cluj-napoca/?search%5Border%5D=created_at%3Adesc&currency=EUR',
-        'https://www.olx.ro/imobiliare/apartamente-garsoniere-de-vanzare/timisoara/?search%5Border%5D=created_at%3Adesc&currency=EUR',
-        'https://www.olx.ro/imobiliare/apartamente-garsoniere-de-vanzare/brasov/?search%5Border%5D=created_at%3Adesc&currency=EUR',
-        'https://www.olx.ro/imobiliare/apartamente-garsoniere-de-vanzare/constanta/?search%5Border%5D=created_at%3Adesc&currency=EUR'
-
-    ]
+    start_urls = [ x.format(y) for x in [
+        'https://www.olx.ro/imobiliare/{}/iasi_39939/?search%5Border%5D=created_at%3Adesc&currency=EUR',
+        'https://www.olx.ro/imobiliare/{}/cluj-napoca/?search%5Border%5D=created_at%3Adesc&currency=EUR',
+        'https://www.olx.ro/imobiliare/{}/timisoara/?search%5Border%5D=created_at%3Adesc&currency=EUR',
+        'https://www.olx.ro/imobiliare/{}/brasov/?search%5Border%5D=created_at%3Adesc&currency=EUR',
+        'https://www.olx.ro/imobiliare/{}/constanta/?search%5Border%5D=created_at%3Adesc&currency=EUR'
+    ] for y in ad_types]
 
     storia_meta = {
         'surface': 'Suprafata construita (m²)',
@@ -32,24 +32,30 @@ class OlxReRoSpider(scrapy.Spider):
         'Firma': False
     }
 
-    def parse(self, response):
+    def parse(self, response, **kwargs):
+
         ads = response.css("div.offer-wrapper")
         ad_city = response.url.split('/?search')[0].split('/')[-1]
-        today_ads_seen = False
+        yesterday_ads_seen = False
+        promo_count = 0
         for ad in ads:
             ad_time = ad.xpath(
                 ".//i[@data-icon='clock']/../text()").extract_first()
+            # we have today or yesterday ads in our list
+            yesterday_ads_seen = 'Ieri' in ad_time or 'Azi' in ad_time
+
             if 'Ieri' in ad_time:
                 ad_link = ad.css("a.detailsLink::attr(href)").extract_first()
                 # ad is a promoted add, skip
                 if ad_link is None:
+                    promo_count += 1
                     continue
 
-                today_ads_seen = True
                 ad_source = 'storia' if 'storia.ro' in ad_link else 'olx'
                 yield response.follow(ad_link, self.parse_listing, cb_kwargs={'ad_source': ad_source, 'ad_city': ad_city})
-
-        if today_ads_seen:
+            
+        if yesterday_ads_seen:
+            # all ads were promoted
             yield scrapy.Request(self.get_next_page(response), self.parse)
 
     def parse_listing(self, response, **kwargs):
@@ -122,6 +128,8 @@ class OlxReRoSpider(scrapy.Spider):
 
     def get_number(self, number_to_parse):
         allowed_chars = ',.'
+        if not number_to_parse:
+            return ''
         return ''.join([c for c in number_to_parse if (c.isdecimal() or c in allowed_chars)])
 
     def get_price_per_sqm(self, surface, price):
