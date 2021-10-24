@@ -8,13 +8,13 @@ class OlxReRoSpider(scrapy.Spider):
     name = 'olx-re-ro'
     ad_types = ['apartamente-garsoniere-de-vanzare'] #,'apartamente-garsoniere-de-inchiriat']
     allowed_domains = ['olx.ro', 'storia.ro']
-    start_urls = [ x.format(y) for x in [
+    start_urls = [ x.format(y) for y in ad_types for x in [
         'https://www.olx.ro/imobiliare/{}/iasi_39939/?search%5Border%5D=created_at%3Adesc&currency=EUR',
         'https://www.olx.ro/imobiliare/{}/cluj-napoca/?search%5Border%5D=created_at%3Adesc&currency=EUR',
         'https://www.olx.ro/imobiliare/{}/timisoara/?search%5Border%5D=created_at%3Adesc&currency=EUR',
         'https://www.olx.ro/imobiliare/{}/brasov/?search%5Border%5D=created_at%3Adesc&currency=EUR',
         'https://www.olx.ro/imobiliare/{}/constanta/?search%5Border%5D=created_at%3Adesc&currency=EUR'
-    ] for y in ad_types]
+    ]]
 
     storia_meta = {
         'surface': 'Suprafata construita (m²)',
